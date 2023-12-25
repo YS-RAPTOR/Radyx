@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Set
 from pyray import Vector2
 
 class Body:
@@ -58,5 +58,8 @@ class GridPhysics:
     def add_dynamic_circles(
         self, entity_index: int, bodies: List[Vector2], radius: float
     ) -> None: ...
-    def get_collisions(self) -> List[Collision]: ...
+    def get_collisions(self) -> Set[Collision]: ...
+    def get_collisions_within_area(
+        self, position: Vector2, radius: float
+    ) -> Set[int]: ...
 

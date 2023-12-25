@@ -1,10 +1,19 @@
-use pyo3::{exceptions::PyTypeError, prelude::*, types::PyDict};
-use std::collections::HashMap;
+use pyo3::prelude::*;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::{self, Hash},
+};
 
 #[derive(Clone, Copy, FromPyObject)]
 pub struct Vector2 {
     x: f32,
     y: f32,
+}
+
+impl Vector2 {
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -67,6 +76,26 @@ pub struct Collision {
     other_body_index: usize,
 }
 
+impl hash::Hash for Collision {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.self_entity_index.hash(state);
+        self.other_entity_index.hash(state);
+        self.self_body_index.hash(state);
+        self.other_body_index.hash(state);
+    }
+}
+
+impl PartialEq for Collision {
+    fn eq(&self, other: &Self) -> bool {
+        self.self_entity_index == other.self_entity_index
+            && self.other_entity_index == other.other_entity_index
+            && self.self_body_index == other.self_body_index
+            && self.other_body_index == other.other_body_index
+    }
+}
+
+impl Eq for Collision {}
+
 #[pymethods]
 impl Collision {
     #[new]
@@ -114,6 +143,7 @@ impl GridPhysics {
     }
 
     pub fn reset(&mut self) {
+        self.dynamic_bodies.clear();
         for cell in self.grid.iter_mut() {
             cell.clear();
         }
@@ -140,8 +170,8 @@ impl GridPhysics {
 
         let (lower_x, upper_x, lower_y, upper_y) = self.get_grid_bounds(body.get_bounds());
 
-        for x in (lower_x..=upper_x).step_by(self.cell_size) {
-            for y in (lower_y..=upper_y).step_by(self.cell_size) {
+        for x in lower_x..=upper_x {
+            for y in lower_y..=upper_y {
                 let cell = self.grid.get_mut(x * self.grid_size + y);
                 if let Some(cell) = cell {
                     cell.push(body);
@@ -178,14 +208,14 @@ impl GridPhysics {
         }
     }
 
-    pub fn get_collisions(&self) -> Vec<Collision> {
-        let mut collisions = Vec::new();
+    pub fn get_collisions(&self) -> HashSet<Collision> {
+        let mut collisions = HashSet::new();
 
         for (entity_index, bodies) in self.dynamic_bodies.iter() {
             for body in bodies.iter() {
                 let (lower_x, upper_x, lower_y, upper_y) = self.get_grid_bounds(body.get_bounds());
-                for x in (lower_x..=upper_x).step_by(self.cell_size) {
-                    for y in (lower_y..=upper_y).step_by(self.cell_size) {
+                for x in lower_x..=upper_x {
+                    for y in lower_y..=upper_y {
                         let cell = self.grid.get(x * self.grid_size + y);
                         if let Some(cell) = cell {
                             for other in cell.iter() {
@@ -196,10 +226,33 @@ impl GridPhysics {
                                         body.body_index,
                                         other.body_index,
                                     );
-                                    collisions.push(collision);
+                                    collisions.insert(collision);
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+        collisions
+    }
+
+    pub fn get_collisions_within_area(&self, position: Vector2, radius: f32) -> HashSet<usize> {
+        let (lower_x, upper_x, lower_y, upper_y) = self.get_grid_bounds((
+            position.x - radius,
+            position.x + radius,
+            position.y - radius,
+            position.y + radius,
+        ));
+
+        let mut collisions = HashSet::new();
+
+        for x in lower_x..=upper_x {
+            for y in lower_y..=upper_y {
+                let cell = self.grid.get(x * self.grid_size + y);
+                if let Some(cell) = cell {
+                    for other in cell.iter() {
+                        collisions.insert(other.entity_index);
                     }
                 }
             }
