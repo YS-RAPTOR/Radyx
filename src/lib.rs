@@ -204,7 +204,7 @@ impl GridPhysics {
             self.dynamic_bodies
                 .entry(entity_index)
                 .or_insert_with(Vec::new)
-                .push(Body::new(entity_index, 0, *pos, radius, false));
+                .push(Body::new(entity_index, i, *pos, radius, false));
         }
     }
 
@@ -267,4 +267,47 @@ fn radyx(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<GridPhysics>()?;
     m.add("__doc__", "Made in Rust!")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn check_dynamic_collisions() {
+        let mut grid = GridPhysics::new(100, 10);
+        grid.add_dynamic_circles(
+            0,
+            vec![
+                Vector2::new(5.0, 5.0),
+                Vector2::new(5.0, 5.5),
+                Vector2::new(5.0, 6.0),
+                Vector2::new(5.0, 6.5),
+            ],
+            1.0,
+        );
+        grid.add_dynamic_circles(
+            1,
+            vec![
+                Vector2::new(5.0, 8.5),
+                Vector2::new(5.0, 9.0),
+                Vector2::new(5.0, 9.5),
+                Vector2::new(5.0, 10.0),
+            ],
+            1.0,
+        );
+
+        let collisions = grid.get_collisions();
+        assert_eq!(collisions.len(), 2);
+        for collision in collisions.iter() {
+            println!(
+                "Self: {}, Other: {}, Self Body: {}, Other Body: {}",
+                collision.self_entity_index,
+                collision.other_entity_index,
+                collision.self_body_index,
+                collision.other_body_index
+            );
+        }
+        assert!(collisions.contains(&Collision::new(1, 0, 0, 3)));
+        assert!(collisions.contains(&Collision::new(0, 1, 3, 0)));
+    }
 }
